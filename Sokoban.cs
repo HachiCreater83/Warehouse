@@ -7,11 +7,11 @@ using UnityEngine.SceneManagement;
 
 public class Sokoban : MonoBehaviour
 {
-    // タイルの種類
+    // タイルの種類,番号ごとに状態を表す変数
     private enum TileType
     {
-        /*タイルの番号振り分け
-         * NONE=0,何も無い
+        /*タイル番号の振り分け,マップ上に表示する際に用いる
+         * NONE=0,何も無い空間
          * GROUND=1,地面
          * TARGET=2,目的地
          * PLAYER=3,プレイヤー
@@ -32,20 +32,20 @@ public class Sokoban : MonoBehaviour
     // 移動方向の種類
     private enum DirectionType
     {
-        //上下左右の移動処理
-        PLAYERUP,
-        PLAYERRIGHT,
-        PLAYERDOWN,
-        PLAYERLEFT,
+        //上下左右の移動処理時に用いる判定
+        UP,
+        RIGHT,
+        DOWN,
+        LEFT,
     }
 
     #region//タイル情報
     /*
-     * ステージ構造が記述されたテキストファイル
-     * 行数
-     * 列数
+     * ステージ構造が記述されたテキストファイルを読み込む
+     * 行数の設定用の変数
+     * 列数の設定用の変数
      * タイル情報を管理する二次元配列
-     * タイルのサイズ
+     * タイルのサイズ,アセットの表示サイズに合わせる
      */
     public TextAsset _stageFile = default;
     private int _rows = default;
@@ -54,18 +54,18 @@ public class Sokoban : MonoBehaviour
     public float _tileSize = default;
     #endregion
 
-    #region //スプライトの設定
+    #region //スプライトの設定,マップに表示する際に用いる設定
     [SerializeField, Header("地面のスプライト")] private Sprite _groundSprite = default;
     [SerializeField, Header("目的地のスプライト")] private Sprite _targetSprite = default;
     [SerializeField, Header("ブロックのスプライト")] private Sprite _blockSprite = default;
     [SerializeField, Header("プレイヤーのスプライト")] private Sprite _playerSprite = default;
-    [SerializeField, Header("プレイヤーの上向きスプライト")] private Sprite _playerupSprite = default;
-    [SerializeField, Header("プレイヤーの左向きスプライト")] private Sprite _playerleftSprite = default;
-    [SerializeField, Header("プレイヤーの下向きスプライト")] private Sprite _playerdownSprite = default;
-    [SerializeField, Header("プレイヤーの右向きスプライト")] private Sprite _playerrightSprite = default;
+    [SerializeField, Header("プレイヤーの上向きスプライト")] private Sprite _player_upSprite = default;
+    [SerializeField, Header("プレイヤーの左向きスプライト")] private Sprite _player_leftSprite = default;
+    [SerializeField, Header("プレイヤーの下向きスプライト")] private Sprite _player_downSprite = default;
+    [SerializeField, Header("プレイヤーの右向きスプライト")] private Sprite _player_rightSprite = default;
     #endregion
 
-    #region //判定、回数などの変数
+    #region //クリア,ミス判定,表示するスプライト,行動回数などに用いる変数
     /*
      * プレイヤーのゲームオブジェクト
      * 中心位置の設定
@@ -82,25 +82,23 @@ public class Sokoban : MonoBehaviour
     private int _blockCount = default;
     private bool _isClear = false;
     private bool _isMiss = false;
-    private SpriteRenderer _playerSpriteRenderer = default;
-    public Canvas _countCanvas = default;
-    public Text _actionCountText = default;
-    public int _numberActions = default;
-    #endregion
-
+    private SpriteRenderer _playersprite = default;
+    [SerializeField] private Canvas _countCanvas = default;
+    [SerializeField] private Text _actionCountText = default;
+    [SerializeField] private int _numberActions = default;
     [SerializeField, Header("Scene切り替え時に表示されるCanvas")] private GameObject _cutInCanvas = default;
     [SerializeField, Header("このScene後に飛ばすScene名")] private string _nextSceneName = default;
+    #endregion
 
-    // 各位置に存在するゲームオブジェクトを管理する連想配列
-    public Dictionary<GameObject, Vector2Int> gameObjectPosTable = new Dictionary<GameObject, Vector2Int>();
+    // 各位置に存在するゲームオブジェクトを管理するための連想配列
+    private Dictionary<GameObject, Vector2Int> _gameObjectPosTable = new Dictionary<GameObject, Vector2Int>();
 
-    
     private void Start()
     {
         /*
-         * タイルの情報を読み込む
-         * ステージを作成
-         * 行動回数の表示
+         * タイルの情報を読み込む処理
+         * ステージを作成する処理
+         * 行動回数の表示,回数はNumberActiinsから呼ぶ
          */
         LoadTileData();
         CreateStage();
@@ -111,18 +109,18 @@ public class Sokoban : MonoBehaviour
     private void LoadTileData()
     {
         // タイルの情報を一行ごとに分割する
-        string[] lines = _stageFile.text.Split
+        var lines = _stageFile.text.Split
         (
             new[] { '\r', '\n' },
             StringSplitOptions.RemoveEmptyEntries
         );
 
         // タイルの列数を計算
-        string[] nums = lines[0].Split(new[] { ',' });
+        var nums = lines[0].Split(new[] { ',' });
 
-        /*  タイルの列数と行数を保持
-         *  行数
-         *  列数
+        /*  タイルの列数と行数を保持する処理
+         *  行数の設定
+         *  列数の設定
          */
         _rows = lines.Length;
         _columns = nums.Length;
@@ -132,7 +130,7 @@ public class Sokoban : MonoBehaviour
         for (int y = 0; y < _rows; y++)
         {
             // 一文字ずつ取得する
-            string st = lines[y];
+            var st = lines[y];
             nums = st.Split(new[] { ',' });
             for (int x = 0; x < _columns; x++)
             {
@@ -142,7 +140,7 @@ public class Sokoban : MonoBehaviour
         }
     }
 
-    // ステージを作成
+    // ステージを作成する処理
     private void CreateStage()
     {
         // ステージの中心位置を計算
@@ -153,19 +151,19 @@ public class Sokoban : MonoBehaviour
         {
             for (int x = 0; x < _columns; x++)
             {
-                TileType value = _tileList[x, y];
+                var val = _tileList[x, y];
 
                 // 何も無い場所は無視
-                if (value == TileType.NONE) continue;
+                if (val == TileType.NONE) continue;
 
                 // タイルの名前に行番号と列番号を付与
-                string name = "tile" + y + "_" + x;
+                var name = "tile" + y + "_" + x;
 
                 // タイルのゲームオブジェクトを作成
-                GameObject tile = new GameObject(name);
+                var tile = new GameObject(name);
 
                 // タイルにスプライトを描画する機能を追加
-                SpriteRenderer sr = tile.AddComponent<SpriteRenderer>();
+                var sr = tile.AddComponent<SpriteRenderer>();
 
                 // タイルのスプライトを設定
                 sr.sprite = _groundSprite;
@@ -173,8 +171,8 @@ public class Sokoban : MonoBehaviour
                 // タイルの位置を設定
                 tile.transform.position = GetDisplayPosition(x, y);
 
-                // 目的地の場合
-                if (value == TileType.TARGET)
+                // 目的地を生成する場合
+                if (val == TileType.TARGET)
                 {
                     /*
                      * 目的地のゲームオブジェクトを作成
@@ -183,14 +181,14 @@ public class Sokoban : MonoBehaviour
                      * 目的地の描画順を手前にする
                      * 目的地の位置を設定
                      */
-                    GameObject destination = new GameObject("destination");
+                    var destination = new GameObject("destination");
                     sr = destination.AddComponent<SpriteRenderer>();
                     sr.sprite = _targetSprite;
                     sr.sortingOrder = 1;
                     destination.transform.position = GetDisplayPosition(x, y);
                 }
-                // プレイヤーの場合
-                else if (value == TileType.PLAYER)
+                // プレイヤーを生成する場合
+                else if (val == TileType.PLAYER)
                 {
                     /*
                      * プレイヤーのゲームオブジェクトを作成
@@ -205,10 +203,10 @@ public class Sokoban : MonoBehaviour
                     sr.sprite = _playerSprite;
                     sr.sortingOrder = 2;
                     _player.transform.position = GetDisplayPosition(x, y);
-                    gameObjectPosTable.Add(_player, new Vector2Int(x, y));
+                    _gameObjectPosTable.Add(_player, new Vector2Int(x, y));
                 }
-                // ブロックの場合
-                else if (value == TileType.BLOCK)
+                // ブロックを生成する場合
+                else if (val == TileType.BLOCK)
                 {
                     /*
                      * ブロックの数を増やす
@@ -221,12 +219,12 @@ public class Sokoban : MonoBehaviour
                      * 
                      */
                     _blockCount++;
-                    GameObject block = new GameObject("block" + _blockCount);
+                    var block = new GameObject("block" + _blockCount);
                     sr = block.AddComponent<SpriteRenderer>();
                     sr.sprite = _blockSprite;
                     sr.sortingOrder = 2;
                     block.transform.position = GetDisplayPosition(x, y);
-                    gameObjectPosTable.Add(block, new Vector2Int(x, y));
+                    _gameObjectPosTable.Add(block, new Vector2Int(x, y));
                 }
             }
         }
@@ -245,7 +243,7 @@ public class Sokoban : MonoBehaviour
     // 指定された位置に存在するゲームオブジェクトを返します
     private GameObject GetGameObjectAtPosition(Vector2Int pos)
     {
-        foreach (KeyValuePair<GameObject, Vector2Int> pair in gameObjectPosTable)
+        foreach (var pair in _gameObjectPosTable)
         {
             // 指定された位置が見つかった場合
             if (pair.Value == pos)
@@ -260,7 +258,7 @@ public class Sokoban : MonoBehaviour
     // 指定された位置のタイルがブロックなら true を返す
     private bool IsBlock(Vector2Int pos)
     {
-        TileType cell = _tileList[pos.x, pos.y];
+        var cell = _tileList[pos.x, pos.y];
         return cell == TileType.BLOCK || cell == TileType.BLOCK_ON_TARGET;
     }
 
@@ -277,89 +275,56 @@ public class Sokoban : MonoBehaviour
     private void Update()
     {
         // ゲームの終了判定中は操作できないようにする
-        if (_isClear || _isMiss)
-        {
-            return;
-        }
+        if (_isClear || _isMiss) return;
 
-        if (Input.GetAxisRaw("Horizontal") == 1)
-        {
-            TryMovePlayer(DirectionType.PLAYERRIGHT);
-            return;
-        }
-        if (Input.GetAxisRaw("Vertical") == 1)
-        {
-            TryMovePlayer(DirectionType.PLAYERUP);
-            return;
-        }
-
-        if (Input.GetAxisRaw("Horizontal") ==-1)
-        {
-            TryMovePlayer(DirectionType.PLAYERLEFT);
-            return;
-        }
-        if (Input.GetAxisRaw("Vertical") ==-1)
-        {
-            TryMovePlayer(DirectionType.PLAYERDOWN);
-            return;
-        }
-        return;
         #region //移動設定
-        /*
         // 上方向の移動処理が発生した場合
         if (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W))
         {
             // プレイヤーが上に移動できるか検証
-            TryMovePlayer(DirectionType.PLAYERUP);
+            TryMovePlayer(DirectionType.UP);
         }
         // 右方向の移動処理が発生した場合
         else if (Input.GetKeyDown(KeyCode.RightArrow) || Input.GetKeyDown(KeyCode.D))
         {
             // プレイヤーが右に移動できるか検証
-            TryMovePlayer(DirectionType.PLAYERRIGHT);
+            TryMovePlayer(DirectionType.RIGHT);
         }
         // 下方向の移動処理が発生した場合
         else if (Input.GetKeyDown(KeyCode.DownArrow) || Input.GetKeyDown(KeyCode.S))
         {
             // プレイヤーが下に移動できるか検証
-            TryMovePlayer(DirectionType.PLAYERDOWN);
+            TryMovePlayer(DirectionType.DOWN);
         }
         // 左方向の移動処理が発生した場合
         else if (Input.GetKeyDown(KeyCode.LeftArrow) || Input.GetKeyDown(KeyCode.A))
         {
             // プレイヤーが左に移動できるか検証
-            TryMovePlayer(DirectionType.PLAYERLEFT);
+            TryMovePlayer(DirectionType.LEFT);
         }
-        */
         #endregion
     }
 
-    /// <summary>
-    /// 指定された方向にプレイヤーが移動できるか検証するための判定を確認する
-    /// 移動できる場合は指定の方向に移動する
-    /// </summary>
-    /// <param name="direction">回転と向きを調節するために用いる</param>
+    // 指定された方向にプレイヤーが移動できるか検証
+    // 移動できる場合は指定の方向に移動する
     private void TryMovePlayer(DirectionType direction)
     {
         /*
-         * プレイヤーの現在地を取得する
+         * プレイヤーの現在地を取得
          * プレイヤーの移動先の位置を計算
          * プレイヤーの移動先がステージ内ではない場合は無視
          */
-        Vector2Int currentPlayerPos = gameObjectPosTable[_player];
-        Vector2Int nextPlayerPos = GetNextPositionAlong(currentPlayerPos, direction);
-        if (!IsValidPosition(nextPlayerPos))
-        {
-            return;
-        }
+        var currentPlayerPos = _gameObjectPosTable[_player];
+        var nextPlayerPos = GetNextPositionAlong(currentPlayerPos, direction);
+        if (!IsValidPosition(nextPlayerPos)) return;
+
         // プレイヤーの移動先にブロックが存在する場合
         if (IsBlock(nextPlayerPos))
         {
             // ブロックの移動先の位置を計算
-            Vector2Int nextBlockPos = GetNextPositionAlong(nextPlayerPos, direction);
+            var nextBlockPos = GetNextPositionAlong(nextPlayerPos, direction);
 
-            // ブロックの移動先がステージ内の場合かつ
-            // ブロックの移動先にブロックが存在しない場合
+            // ブロックの移動先がステージ内の場合かつ,ブロックの移動先にブロックが存在しない場合
             if (IsValidPosition(nextBlockPos) && !IsBlock(nextBlockPos))
             {
                 //プレイヤーの行動回数を減らす
@@ -367,15 +332,15 @@ public class Sokoban : MonoBehaviour
                 _actionCountText.text = _numberActions.ToString();
 
                 /*
-                 * 移動するブロックを取得する
+                 * 移動するブロックを取得
                  * プレイヤーの移動先のタイルの情報を更新
                  * ブロックを移動
                  * ブロックの位置を更新
                  */
-                GameObject block = GetGameObjectAtPosition(nextPlayerPos);
+                var block = GetGameObjectAtPosition(nextPlayerPos);
                 UpdateGameObjectPosition(nextPlayerPos);
                 block.transform.position = GetDisplayPosition(nextBlockPos.x, nextBlockPos.y);
-                gameObjectPosTable[block] = nextBlockPos;
+                _gameObjectPosTable[block] = nextBlockPos;
 
                 // ブロックの移動先の番号を更新
                 if (_tileList[nextBlockPos.x, nextBlockPos.y] == TileType.GROUND)
@@ -396,7 +361,7 @@ public class Sokoban : MonoBehaviour
                  */
                 UpdateGameObjectPosition(currentPlayerPos);
                 _player.transform.position = GetDisplayPosition(nextPlayerPos.x, nextPlayerPos.y);
-                gameObjectPosTable[_player] = nextPlayerPos;
+                _gameObjectPosTable[_player] = nextPlayerPos;
 
                 // プレイヤーの移動先の番号を更新
                 if (_tileList[nextPlayerPos.x, nextPlayerPos.y] == TileType.GROUND)
@@ -423,12 +388,12 @@ public class Sokoban : MonoBehaviour
              */
             UpdateGameObjectPosition(currentPlayerPos);
             _player.transform.position = GetDisplayPosition(nextPlayerPos.x, nextPlayerPos.y);
-            gameObjectPosTable[_player] = nextPlayerPos;
+            _gameObjectPosTable[_player] = nextPlayerPos;
             _numberActions--;
             _actionCountText.text = _numberActions.ToString();
+            GetComponent<AudioSource>().Play();
 
-            // プレイヤーの移動先の番号を更新
-            // 移動先が地面ならプレイヤーの番号に更新
+            // プレイヤーの移動先の番号を更新,移動先が地面ならプレイヤーの番号に更新
             if (_tileList[nextPlayerPos.x, nextPlayerPos.y] == TileType.GROUND)
             {
                 _tileList[nextPlayerPos.x, nextPlayerPos.y] = TileType.PLAYER;
@@ -452,7 +417,7 @@ public class Sokoban : MonoBehaviour
          * スプライト情報を取得
          */
         _player = GameObject.Find("player");
-        _playerSpriteRenderer = _player.GetComponent<SpriteRenderer>();
+        _playersprite = _player.GetComponent<SpriteRenderer>();
 
         //まだ行動できるかどうかの確認
         if (_numberActions <= 0)
@@ -465,27 +430,27 @@ public class Sokoban : MonoBehaviour
         switch (direction)
         {
             // 上方向の移動後処理
-            case DirectionType.PLAYERUP:
+            case DirectionType.UP:
                 pos.y -= 1;
-                _playerSpriteRenderer.sprite = _playerupSprite;
+                _playersprite.sprite = _player_upSprite;
                 break;
 
             // 右方向の移動後処理
-            case DirectionType.PLAYERRIGHT:
+            case DirectionType.RIGHT:
                 pos.x += 1;
-                _playerSpriteRenderer.sprite = _playerrightSprite;
+                _playersprite.sprite = _player_rightSprite;
                 break;
 
             // 下方向の移動後処理
-            case DirectionType.PLAYERDOWN:
+            case DirectionType.DOWN:
                 pos.y += 1;
-                _playerSpriteRenderer.sprite = _playerdownSprite;
+                _playersprite.sprite = _player_downSprite;
                 break;
 
             // 左方向の移動後処理
-            case DirectionType.PLAYERLEFT:
+            case DirectionType.LEFT:
                 pos.x -= 1;
-                _playerSpriteRenderer.sprite = _playerleftSprite;
+                _playersprite.sprite = _player_leftSprite;
                 break;
         }
         return pos;
@@ -495,7 +460,7 @@ public class Sokoban : MonoBehaviour
     private void UpdateGameObjectPosition(Vector2Int pos)
     {
         // 指定された位置のタイルの番号を取得
-        TileType cell = _tileList[pos.x, pos.y];
+        var cell = _tileList[pos.x, pos.y];
 
         // プレイヤーもしくはブロックの場合
         if (cell == TileType.PLAYER || cell == TileType.BLOCK)
