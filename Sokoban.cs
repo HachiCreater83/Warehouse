@@ -88,6 +88,8 @@ public class Sokoban : MonoBehaviour
     [SerializeField] private int _numberActions = default;
     [SerializeField, Header("Scene切り替え時に表示されるCanvas")] private GameObject _cutInCanvas = default;
     [SerializeField, Header("このScene後に飛ばすScene名")] private string _nextSceneName = default;
+     AudioClip _playMusic=default;
+    AudioSource _audioSource = default;
     #endregion
 
     // 各位置に存在するゲームオブジェクトを管理するための連想配列
@@ -99,10 +101,12 @@ public class Sokoban : MonoBehaviour
          * タイルの情報を読み込む処理
          * ステージを作成する処理
          * 行動回数の表示,回数はNumberActiinsから呼ぶ
+         * 音楽情報の取得
          */
         LoadTileData();
         CreateStage();
         _actionCountText.text = _numberActions.ToString();
+        _audioSource = GetComponent<AudioSource>();
     }
 
     // タイルの情報を読み込む処理
@@ -316,7 +320,10 @@ public class Sokoban : MonoBehaviour
          */
         var currentPlayerPos = _gameObjectPosTable[_player];
         var nextPlayerPos = GetNextPositionAlong(currentPlayerPos, direction);
-        if (!IsValidPosition(nextPlayerPos)) return;
+        if (!IsValidPosition(nextPlayerPos))
+        {
+            return;
+        }
 
         // プレイヤーの移動先にブロックが存在する場合
         if (IsBlock(nextPlayerPos))
@@ -391,7 +398,7 @@ public class Sokoban : MonoBehaviour
             _gameObjectPosTable[_player] = nextPlayerPos;
             _numberActions--;
             _actionCountText.text = _numberActions.ToString();
-            GetComponent<AudioSource>().Play();
+            _audioSource.PlayOneShot(_playMusic,0.3f);
 
             // プレイヤーの移動先の番号を更新,移動先が地面ならプレイヤーの番号に更新
             if (_tileList[nextPlayerPos.x, nextPlayerPos.y] == TileType.GROUND)
